@@ -1,0 +1,240 @@
+package com.example.myapplication.slice;
+
+import com.example.myapplication.ResourceTable;
+import ohos.aafwk.ability.AbilitySlice;
+import ohos.aafwk.content.Intent;
+import ohos.agp.colors.RgbColor;
+import ohos.agp.components.*;
+import ohos.agp.components.element.ShapeElement;
+import ohos.agp.render.Canvas;
+import ohos.agp.render.Paint;
+import ohos.agp.utils.Color;
+import ohos.agp.utils.TextAlignment;
+import ohos.agp.components.DependentLayout;
+import ohos.agp.window.service.Display;
+import ohos.agp.window.service.DisplayManager;
+import ohos.eventhandler.EventHandler;
+import ohos.eventhandler.EventRunner;
+import ohos.eventhandler.InnerEvent;
+import ohos.global.resource.NotExistException;
+import ohos.global.resource.Resource;
+import ohos.hiviewdfx.HiLog;
+import ohos.hiviewdfx.HiLogLabel;
+import java.io.IOException;
+import java.util.Random;
+
+
+public class MainAbilitySlice extends AbilitySlice {
+    Display display = null;
+    DependentLayout rootLayout = null;
+    float t = 0.0f;
+    float G = 9.8f;
+    int MISECOND = 200;
+    int RATIO = 30;
+    Text text = null;
+    Image image = null;
+    Button button = null;
+    boolean flag = false;
+
+    @Override
+    public void onStart(Intent intent) {
+        super.onStart(intent);
+        display = DisplayManager.getInstance().getDefaultDisplay(getContext()).get();
+        int availableWidth = display.getAttributes().width;
+        int availableHeight = display.getAttributes().height;
+        int realWidth = display.getRealAttributes().width;
+        int realHeight = display.getRealAttributes().height;
+        System.out.println("sziit 屏幕尺寸：" + availableWidth + "" + availableHeight + "" + realWidth + "" + realHeight);
+        HiLog.info(new HiLogLabel(HiLog.LOG_APP, 0x00100, "sziit"), "%{public}d %{public}d %{public}d %{public}d", availableWidth, availableHeight, realWidth, realHeight);
+        rootLayout = new DependentLayout(getContext());
+        rootLayout.setWidth(ComponentContainer.LayoutConfig.MATCH_PARENT);
+        rootLayout.setHeight(ComponentContainer.LayoutConfig.MATCH_PARENT);
+        super.setUIContent(rootLayout);
+
+        text = new Text(getContext());
+        text.setId(101);
+        text.setTranslation(100, 200);
+        text.setComponentSize(20, 20);
+        text.setText("");
+        text.setTextColor(new Color(0xFFFF0000));
+        text.setTextSize(10);
+        text.setTextAlignment(TextAlignment.CENTER);
+        text.setPadding(10, 10, 10, 10);
+        ShapeElement elementForText = new ShapeElement();
+        elementForText.setRgbColor(new RgbColor(255, 0, 0));
+        elementForText.setCornerRadius(10);
+        text.setBackground(elementForText);
+        rootLayout.addComponent(text);
+
+        image = new Image(getContext());
+        image.setPixelMap(ResourceTable.Media_bird2);
+        image.setId(102);
+        image.setTranslation(300, 200);
+        image.setComponentSize(50, 50);
+        image.setScaleMode(Image.ScaleMode.STRETCH);
+        rootLayout.addComponent(image);
+        button = new Button(getContext());
+        button.setId(103);
+        button.setText("开始");
+        button.setTextColor(new Color(0xFFFFFFFF));
+        button.setTextSize(40);
+        button.setTextAlignment(TextAlignment.CENTER);
+        Resource bgPic = null;
+        try {
+            bgPic = getResourceManager().getResource(ResourceTable.Media_icon);
+        } catch (IOException | NotExistException e) {
+            e.printStackTrace();
+        }
+
+        ShapeElement elementForButton = new ShapeElement();
+        elementForButton.setRgbColor(new RgbColor(0, 125, 255));
+        elementForButton.setCornerRadius(50);
+        button.setBackground(elementForButton);
+        DependentLayout.LayoutConfig configForButton = new DependentLayout.LayoutConfig(250, 100);
+        configForButton.addRule(DependentLayout.LayoutConfig.CENTER_IN_PARENT);
+        button.setLayoutConfig(configForButton);
+        rootLayout.addComponent(button);
+        rootLayout.findComponentById(103).setClickedListener(new Component.ClickedListener() {
+            @Override
+            public void onClick(Component component) {
+                if (t > 1.0) {
+                    t = 0.0f;
+                    rootLayout.removeAllComponents();
+                    rootLayout.addComponent(text);
+                    rootLayout.addComponent(image);
+                    rootLayout.addComponent(button);
+                }
+                flag = true;
+                timer();
+                rootLayout.findComponentById(103).setVisibility(Component.HIDE);
+            }
+        });
+    }
+
+    EventHandler handler1 = new EventHandler(EventRunner.create());
+    final EventHandler handler2 = new EventHandler(EventRunner.getMainEventRunner()) {
+        @Override
+        protected void processEvent(InnerEvent event) {
+            super.processEvent(event);
+            if (event == null) {
+                return;
+            }
+            if (event.eventId == 100) {
+                System.out.println("sziit 2" + "主线程内执行UI更新任务," + "参数是：" + event.param);
+                birdMove();
+            }
+        }
+    };
+    final EventHandler handler3 = new EventHandler(EventRunner.getMainEventRunner());
+
+    private void timer() {
+        rootLayout.addDrawTask(new Component.DrawTask() {
+            @Override
+            public void onDraw(Component component, Canvas canvas) {
+                System.out.println("sziit" + "进入onDraw");
+                int useMethodNumber = 3;
+                if (flag) {
+                    switch (useMethodNumber) {
+                        case 1:
+                            handler1.postTask(new Runnable() {
+                                @Override
+                                public void run() {
+                                    getContext().getUITaskDispatcher().asyncDispatch(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            birdMove();
+                                            rootLayout.invalidate();
+                                            System.out.println("sziit 1" + "执行完毕postTask内的根布局 invalidate()");
+
+                                        }
+                                    });
+                                }
+                            }, 175);
+                            break;
+                        case 2:
+                            handler2.sendEvent(InnerEvent.get(100, 200), 175);
+                            break;
+                        case 3:
+                            handler3.postTask(new Runnable() {
+                                @Override
+                                public void run() {
+                                    birdMove();
+                                    rootLayout.invalidate();
+                                    System.out.println("sziit 3" + "执行完毕postTask内的根布局invalidate()");
+                                }
+                            }, 175);
+                            break;
+                    }
+                } else {
+                    System.out.println("sziit" + "停止更新UI");
+                }
+            }
+        });
+    }
+
+
+    // 在Canvas上画一条直线
+    public void drawLine(Canvas canvas, float startX, float startY, float endX, float endY) {
+        Paint paint = new Paint();
+        paint.setStrokeWidth(10); // 设置线宽
+        paint.setColor(getRandomColor()); // 设置颜色（随机颜色）
+        canvas.drawLine(startX, startY, endX, endY, paint);
+    }
+
+    // 获取随机颜色
+    private Color getRandomColor() {
+        Random random = new Random();
+        return null;
+    }
+
+
+
+
+    public void birdMove() {
+        System.out.println("sziit调用了birdMove()");
+        Text text =new Text(getContext());
+        text.setTranslation(100,200);
+        text.setComponentSize(20,20);
+        text.setText("");
+        text.setTextColor(new Color(0xFFFF0000));
+        text.setTextSize(10);
+        text.setTextAlignment(TextAlignment.CENTER);
+        text.setPadding(10,10,10,10);
+        ShapeElement elementForText =new ShapeElement();
+        elementForText.setRgbColor(new RgbColor(255,0,0));
+        elementForText.setCornerRadius(10);
+        text.setBackground(elementForText);
+        rootLayout.addComponent(text);
+        t +=MISECOND/1000.0;
+        if((200+G*(t*t/2)*RATIO)<(display.getAttributes().height - 300))
+        {
+
+            image.setTranslationY((float) (200+G*(t*t/2)*RATIO));
+            text.setTranslationY((float) (200+G*(t*t/2)*RATIO));;
+
+            Text value =new Text(getContext());
+
+            value.setTranslation(120,((int) (200+G*(t*t/2)*RATIO -15) ));
+            value.setComponentSize(150,40);
+            value.setText(String.format("%.2f",(float) (200+G*(t*t/2)*RATIO)));
+            value.setTextSize(40);
+            value.setTextAlignment(TextAlignment.CENTER);
+            rootLayout.addComponent(value);
+        }
+        else {
+            flag =false;
+            rootLayout.findComponentById(103).setVisibility(Component.VISIBLE);
+        }
+    }
+
+
+    @Override
+    public void onActive() {
+        super.onActive();
+    }
+
+    @Override
+    public void onForeground(Intent intent) {
+        super.onForeground(intent);
+    }
+}
